@@ -1,10 +1,10 @@
-# 零基礎科展用範例程式（清洗後框大小固定，可移動）
+# 零基礎科展範例程式（清洗後框可移動，大小固定）
 # --------------------------------------------------
 # 改版重點：
 # ✅ 清洗前自由框選
-# ✅ 清洗後框大小與清洗前相同，但可移動位置
+# ✅ 清洗後框大小與清洗前相同，可移動位置
 # ✅ 兩張圖都能看到框
-# ✅ 分析自動裁切框內區域
+# ✅ 防止 box_coords 錯誤導致 TypeError
 # --------------------------------------------------
 
 import numpy as np
@@ -78,19 +78,20 @@ if HAS_STREAMLIT:
             key="before_crop"
         )
 
-        # 安全處理座標
-        if not box_coords or len(box_coords)!=4:
+        # 安全處理 box_coords，避免 TypeError
+        if box_coords is None or len(box_coords) != 4:
             x0, y0, x1, y1 = 0, 0, before_img.width, before_img.height
         else:
-            x0, y0, x1, y1 = [int(round(c)) for c in box_coords]
+            try:
+                x0, y0, x1, y1 = [int(round(float(c))) for c in box_coords]
+            except Exception:
+                x0, y0, x1, y1 = 0, 0, before_img.width, before_img.height
 
         width = x1 - x0
         height = y1 - y0
 
         st.subheader("② 清洗後框選（大小固定，可移動）")
         # 使用清洗前框大小初始化清洗後框
-        # initial_box: (x0, y0, x1, y1)
-        # 不使用 fixed_size，透過初始化框大小固定，位置可調整
         cropped_after = st_cropper(
             after_img,
             realtime_update=True,
