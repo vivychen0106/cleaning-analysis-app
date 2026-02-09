@@ -76,7 +76,7 @@ if HAS_STREAMLIT:
         st.divider()
         st.subheader("① 在清洗前圖片上選擇分析區域")
 
-        # 只使用一個裁切框，返回裁切結果與框座標
+        # 只使用一個裁切框，返回裁切結果與座標 tuple (x0, y0, x1, y1)
         cropped_before, box_coords = st_cropper(
             before_img,
             realtime_update=True,
@@ -87,8 +87,8 @@ if HAS_STREAMLIT:
         )
 
         # 使用同一框座標裁切清洗後圖片
-        x, y, w, h = box_coords['x'], box_coords['y'], box_coords['width'], box_coords['height']
-        cropped_after = after_img.crop((x, y, x + w, y + h))
+        x0, y0, x1, y1 = box_coords  # tuple 直接解包
+        cropped_after = after_img.crop((x0, y0, x1, y1))
 
         col3, col4 = st.columns(2)
         with col3:
