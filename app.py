@@ -1,8 +1,9 @@
-# 手把手、零基礎可用的範例程式（單框同步裁切版本）
+# 手把手、零基礎可用的範例程式（單框同步裁切、安全版）
 # --------------------------------------------------
 # 改版重點：
 # ✅ 只使用一個框選工具（清洗前）
 # ✅ 清洗後自動套用相同裁切範圍，不可拖動
+# ✅ 座標浮點數與超出範圍問題已修正
 # ✅ 避免尺寸不一致導致 cv2.error
 # --------------------------------------------------
 
@@ -50,7 +51,7 @@ def analyze_cleaning(before_crop: np.ndarray, after_crop: np.ndarray) -> float:
     return float(np.mean(diff) / 255 * 100)
 
 # --------------------------------------------------
-# Streamlit 視覺化介面（單框同步裁切）
+# Streamlit 視覺化介面（單框同步裁切、安全版）
 # --------------------------------------------------
 
 if HAS_STREAMLIT:
@@ -87,7 +88,12 @@ if HAS_STREAMLIT:
         )
 
         # 使用同一框座標裁切清洗後圖片
-        x0, y0, x1, y1 = box_coords  # tuple 直接解包
+        x0, y0, x1, y1 = map(int, box_coords)  # 轉整數
+        x0 = max(0, min(x0, after_img.width))
+        x1 = max(0, min(x1, after_img.width))
+        y0 = max(0, min(y0, after_img.height))
+        y1 = max(0, min(y1, after_img.height))
+
         cropped_after = after_img.crop((x0, y0, x1, y1))
 
         col3, col4 = st.columns(2)
