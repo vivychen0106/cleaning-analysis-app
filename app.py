@@ -1,12 +1,9 @@
-# 手把手、零基礎可用的範例程式（可視化裁切版本）
+# 手把手、零基礎可用的範例程式（單框同步裁切版本）
 # --------------------------------------------------
-# 改版重點（給老師看的）：
-# ✅ 裁切不再用「數值滑桿」
-# ✅ 改成「直接在圖片上用滑鼠框選」
-#    → 對學生與評審都直觀
-#
-# 技術說明（不用背）：
-# 使用 streamlit-cropper 套件
+# 改版重點：
+# ✅ 只使用一個框選工具（清洗前）
+# ✅ 清洗後自動套用相同裁切範圍，不可拖動
+# ✅ 避免尺寸不一致導致 cv2.error
 # --------------------------------------------------
 
 import sys
@@ -30,7 +27,7 @@ try:
 except ModuleNotFoundError:
     raise ModuleNotFoundError("需要安裝 scikit-image")
 
-# ⭐ 新增：可視化裁切工具
+# ⭐ 可視化裁切工具
 try:
     from streamlit_cropper import st_cropper
 except ModuleNotFoundError:
@@ -41,41 +38,35 @@ except ModuleNotFoundError:
 # --------------------------------------------------
 
 def analyze_cleaning(before_crop: np.ndarray, after_crop: np.ndarray) -> float:
-    # ① 轉灰階
     before_gray = cv2.cvtColor(before_crop, cv2.COLOR_RGB2GRAY)
     after_gray = cv2.cvtColor(after_crop, cv2.COLOR_RGB2GRAY)
 
-    # ② 【關鍵修正】確保兩張圖尺寸完全一致
+    # 確保尺寸一致
     if before_gray.shape != after_gray.shape:
         after_gray = cv2.resize(after_gray, (before_gray.shape[1], before_gray.shape[0]))
 
-    # ③ 亮度分布校正（降低拍照光源誤差）
     after_matched = exposure.match_histograms(after_gray, before_gray)
-
-    # ④ 計算像素差異
     diff = cv2.absdiff(before_gray, after_matched.astype(np.uint8))
-
-    # ⑤ 轉換為百分比洗淨差異
     return float(np.mean(diff) / 255 * 100)
 
 # --------------------------------------------------
-# Streamlit 視覺化介面（主要使用模式）
+# Streamlit 視覺化介面（單框同步裁切）
 # --------------------------------------------------
 
 if HAS_STREAMLIT:
-    st.set_page_config(page_title="抹布洗淨力影像分析（視覺裁切）", layout="wide")
+    st.set_page_config(page_title="抹布洗淨力影像分析（單框同步裁切）", layout="wide")
 
     st.title("🧼 抹布清洗前後洗淨力影像分析")
-    st.write("請在圖片上直接框選同一塊抹布區域，再進行洗淨力分析。")
+    st.write("請在清洗前圖片上框選分析區域，清洗後將自動套用相同區域")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("清洗前（請框選分析區域）")
+        st.subheader("清洗前（可拖動框選）")
         before_file = st.file_uploader("上傳清洗前照片", type=["jpg", "png", "jpeg"], key="before")
 
     with col2:
-        st.subheader("清洗後（會自動套用相同裁切）")
+        st.subheader("清洗後（自動套用相同裁切範圍）")
         after_file = st.file_uploader("上傳清洗後照片", type=["jpg", "png", "jpeg"], key="after")
 
     if before_file and after_file:
@@ -83,25 +74,27 @@ if HAS_STREAMLIT:
         after_img = Image.open(after_file).convert("RGB")
 
         st.divider()
-        st.subheader("① 用滑鼠框選『同一塊抹布』")
+        st.subheader("① 在清洗前圖片上選擇分析區域")
 
-        # 👇 使用者直接在圖上裁切
-        cropped_before = st_cropper(
+        # 只使用一個裁切框，返回裁切結果與框座標
+        cropped_before, box_coords = st_cropper(
             before_img,
             realtime_update=True,
             box_color="#FF0000",
-            aspect_ratio=None
+            aspect_ratio=None,
+            return_type='both',
+            key="single_crop"
         )
 
-        # 套用相同裁切尺寸到 after 圖
-        w, h = cropped_before.size
-        cropped_after = after_img.crop((0, 0, w, h))
+        # 使用同一框座標裁切清洗後圖片
+        x, y, w, h = box_coords['x'], box_coords['y'], box_coords['width'], box_coords['height']
+        cropped_after = after_img.crop((x, y, x + w, y + h))
 
         col3, col4 = st.columns(2)
         with col3:
             st.image(cropped_before, caption="清洗前（裁切後）")
         with col4:
-            st.image(cropped_after, caption="清洗後（裁切後）")
+            st.image(cropped_after, caption="清洗後（裁切後，自動套用框）")
 
         st.divider()
         st.subheader("② 洗淨力分析結果")
@@ -115,7 +108,7 @@ if HAS_STREAMLIT:
 
         st.markdown("""
         ### 🔍 結果說明（學生可理解版）
-        - 在相同位置下，比較清洗前後顏色變化
+        - 清洗前框選的區域，自動套用到清洗後
         - 百分比越高，代表污垢被洗掉得越多
         - 已透過亮度校正，降低拍照光線影響
         - 可用於比較不同清潔方式或清潔劑
@@ -123,10 +116,6 @@ if HAS_STREAMLIT:
 
     else:
         st.info("請先上傳清洗前與清洗後的照片")
-
-# --------------------------------------------------
-# CLI 備援模式（不影響科展，但保留專業完整性）
-# --------------------------------------------------
 
 else:
     print("此版本主要設計為網頁應用程式，請於 Streamlit Cloud 使用")
