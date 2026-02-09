@@ -1,4 +1,4 @@
-# 零基礎科展範例（清洗後固定大小框，可比對）
+# 零基礎科展範例（清洗後框可微調，大小固定）
 import numpy as np
 from PIL import Image
 
@@ -39,7 +39,7 @@ def analyze_cleaning(before_crop: np.ndarray, after_crop: np.ndarray) -> float:
 if HAS_STREAMLIT:
     st.set_page_config(page_title="抹布洗淨力分析", layout="wide")
     st.title("🧼 抹布清洗前後洗淨力影像分析")
-    st.write("清洗前框自由調整，清洗後自動套用同樣區域顯示")
+    st.write("清洗前自由框選，清洗後框大小固定，可拖動位置")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -62,7 +62,7 @@ if HAS_STREAMLIT:
         )
 
         # 安全處理座標
-        if not box_coords or len(box_coords)!=4:
+        if not box_coords or len(box_coords) != 4:
             x0, y0, x1, y1 = 0, 0, before_img.width, before_img.height
         else:
             try:
@@ -73,15 +73,23 @@ if HAS_STREAMLIT:
         width = x1 - x0
         height = y1 - y0
 
-        st.subheader("② 清洗後自動套用同樣區域")
-        # 裁切清洗後圖
-        cropped_after = after_img.crop((x0, y0, x0+width, y0+height))
+        st.subheader("② 清洗後框選（大小固定，可拖動位置）")
+        # 清洗後框大小固定，使用 fixed_size
+        cropped_after = st_cropper(
+            after_img,
+            realtime_update=True,
+            box_color="#00AAFF",
+            aspect_ratio=None,
+            return_type='image',
+            key="after_crop",
+            fixed_size=(width, height)  # 固定大小
+        )
 
         col3, col4 = st.columns(2)
         with col3:
             st.image(cropped_before, caption="清洗前（裁切後）")
         with col4:
-            st.image(cropped_after, caption="清洗後（裁切後）")
+            st.image(cropped_after, caption="清洗後（裁切後，可拖動框）")
 
         st.subheader("③ 洗淨力分析")
         diff_percent = analyze_cleaning(np.array(cropped_before), np.array(cropped_after))
@@ -89,7 +97,7 @@ if HAS_STREAMLIT:
 
         st.markdown("""
         ### 🔍 結果說明
-        - 清洗前自由框選，清洗後自動套用同樣區域
+        - 清洗前自由框選，清洗後框大小固定，可拖動位置
         - 百分比越高表示污垢被清除越多
         - 可比較不同清潔方式或清潔劑
         """)
