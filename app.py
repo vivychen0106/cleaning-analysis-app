@@ -1,11 +1,11 @@
-# 手把手、零基礎可用的範例程式（單框同步裁切、最安全版）
+# 手把手、零基礎可用的範例程式（單框同步裁切、完全穩定版）
 # --------------------------------------------------
 # 改版重點：
 # ✅ 只使用一個框選工具（清洗前）
-# ✅ 清洗後自動套用相同裁切範圍，不可拖動
-# ✅ 兼容 streamlit-cropper 版本差異，避免 None 或格式錯誤
-# ✅ 座標浮點數轉整數，限制在圖片範圍內
-# ✅ 避免尺寸不一致導致 cv2.error
+# ✅ 清洗後自動套用相同裁切範圍
+# ✅ 完全檢查 st_cropper 回傳值，避免 None、浮點數、tuple 格式錯誤
+# ✅ 座標限制在圖片範圍內
+# ✅ 避免 cv2 尺寸不一致或 PIL 裁切錯誤
 # --------------------------------------------------
 
 import sys
@@ -29,21 +29,19 @@ try:
 except ModuleNotFoundError:
     raise ModuleNotFoundError("需要安裝 scikit-image")
 
-# ⭐ 可視化裁切工具
 try:
     from streamlit_cropper import st_cropper
 except ModuleNotFoundError:
     raise ModuleNotFoundError("需要安裝 streamlit-cropper")
 
 # --------------------------------------------------
-# 共用分析核心
+# 分析核心
 # --------------------------------------------------
 
 def analyze_cleaning(before_crop: np.ndarray, after_crop: np.ndarray) -> float:
     before_gray = cv2.cvtColor(before_crop, cv2.COLOR_RGB2GRAY)
     after_gray = cv2.cvtColor(after_crop, cv2.COLOR_RGB2GRAY)
 
-    # 確保尺寸一致
     if before_gray.shape != after_gray.shape:
         after_gray = cv2.resize(after_gray, (before_gray.shape[1], before_gray.shape[0]))
 
@@ -52,11 +50,11 @@ def analyze_cleaning(before_crop: np.ndarray, after_crop: np.ndarray) -> float:
     return float(np.mean(diff) / 255 * 100)
 
 # --------------------------------------------------
-# Streamlit 視覺化介面（單框同步裁切、最安全版）
+# Streamlit 視覺化介面
 # --------------------------------------------------
 
 if HAS_STREAMLIT:
-    st.set_page_config(page_title="抹布洗淨力影像分析（單框同步裁切）", layout="wide")
+    st.set_page_config(page_title="抹布洗淨力影像分析（單框穩定版）", layout="wide")
 
     st.title("🧼 抹布清洗前後洗淨力影像分析")
     st.write("請在清洗前圖片上框選分析區域，清洗後將自動套用相同區域")
@@ -78,7 +76,6 @@ if HAS_STREAMLIT:
         st.divider()
         st.subheader("① 在清洗前圖片上選擇分析區域")
 
-        # 只使用一個裁切框，返回裁切結果與座標 tuple (x0, y0, x1, y1)
         cropped_before, box_coords = st_cropper(
             before_img,
             realtime_update=True,
@@ -88,12 +85,18 @@ if HAS_STREAMLIT:
             key="single_crop"
         )
 
-        # 安全處理框座標
-        if box_coords is None or not hasattr(box_coords, '__iter__') or len(box_coords) != 4:
-            # 若沒有框或格式錯誤，使用整張圖片
+        # 安全處理座標
+        if not box_coords or len(box_coords) != 4:
+            # 如果框未拉或格式錯誤，使用整張圖片
             x0, y0, x1, y1 = 0, 0, before_img.width, before_img.height
         else:
-            x0, y0, x1, y1 = map(int, box_coords)
+            try:
+                # 嘗試轉整數
+                x0, y0, x1, y1 = [int(round(c)) for c in box_coords]
+            except Exception:
+                x0, y0, x1, y1 = 0, 0, before_img.width, before_img.height
+
+            # 限制範圍在圖片內
             x0 = max(0, min(x0, after_img.width))
             x1 = max(0, min(x1, after_img.width))
             y0 = max(0, min(y0, after_img.height))
@@ -110,10 +113,7 @@ if HAS_STREAMLIT:
         st.divider()
         st.subheader("② 洗淨力分析結果")
 
-        diff_percent = analyze_cleaning(
-            np.array(cropped_before),
-            np.array(cropped_after)
-        )
+        diff_percent = analyze_cleaning(np.array(cropped_before), np.array(cropped_after))
 
         st.success(f"📊 洗淨差異百分比：約 {diff_percent:.2f} %")
 
