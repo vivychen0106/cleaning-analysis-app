@@ -85,7 +85,13 @@ if HAS_STREAMLIT:
 
         # 套用相同裁切尺寸到 after 圖
         w, h = cropped_before.size
-        cropped_after = after_img.crop((0, 0, w, h))
+        cropped_after = st_cropper(
+        after_img,
+        realtime_update=True,
+        box_color="#00AAFF",
+        aspect_ratio=None,
+        key="after_crop"
+       )
 
         col3, col4 = st.columns(2)
         with col3:
@@ -120,3 +126,4 @@ if HAS_STREAMLIT:
 
 else:
     print("此版本主要設計為網頁應用程式，請於 Streamlit Cloud 使用")
+
