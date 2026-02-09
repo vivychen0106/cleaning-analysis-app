@@ -1,9 +1,10 @@
-# 手把手、零基礎可用的範例程式（單框同步裁切、安全版）
+# 手把手、零基礎可用的範例程式（單框同步裁切、最安全版）
 # --------------------------------------------------
 # 改版重點：
 # ✅ 只使用一個框選工具（清洗前）
 # ✅ 清洗後自動套用相同裁切範圍，不可拖動
-# ✅ 座標浮點數與超出範圍問題已修正
+# ✅ 兼容 streamlit-cropper 版本差異，避免 None 或格式錯誤
+# ✅ 座標浮點數轉整數，限制在圖片範圍內
 # ✅ 避免尺寸不一致導致 cv2.error
 # --------------------------------------------------
 
@@ -51,7 +52,7 @@ def analyze_cleaning(before_crop: np.ndarray, after_crop: np.ndarray) -> float:
     return float(np.mean(diff) / 255 * 100)
 
 # --------------------------------------------------
-# Streamlit 視覺化介面（單框同步裁切、安全版）
+# Streamlit 視覺化介面（單框同步裁切、最安全版）
 # --------------------------------------------------
 
 if HAS_STREAMLIT:
@@ -87,12 +88,16 @@ if HAS_STREAMLIT:
             key="single_crop"
         )
 
-        # 使用同一框座標裁切清洗後圖片
-        x0, y0, x1, y1 = map(int, box_coords)  # 轉整數
-        x0 = max(0, min(x0, after_img.width))
-        x1 = max(0, min(x1, after_img.width))
-        y0 = max(0, min(y0, after_img.height))
-        y1 = max(0, min(y1, after_img.height))
+        # 安全處理框座標
+        if box_coords is None or not hasattr(box_coords, '__iter__') or len(box_coords) != 4:
+            # 若沒有框或格式錯誤，使用整張圖片
+            x0, y0, x1, y1 = 0, 0, before_img.width, before_img.height
+        else:
+            x0, y0, x1, y1 = map(int, box_coords)
+            x0 = max(0, min(x0, after_img.width))
+            x1 = max(0, min(x1, after_img.width))
+            y0 = max(0, min(y0, after_img.height))
+            y1 = max(0, min(y1, after_img.height))
 
         cropped_after = after_img.crop((x0, y0, x1, y1))
 
