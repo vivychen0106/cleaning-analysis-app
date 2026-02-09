@@ -1,12 +1,4 @@
-# 零基礎科展範例程式（清洗後框可移動，大小固定）
-# --------------------------------------------------
-# 改版重點：
-# ✅ 清洗前自由框選
-# ✅ 清洗後框大小與清洗前相同，可移動位置
-# ✅ 兩張圖都能看到框
-# ✅ 防止 box_coords 錯誤導致 TypeError
-# --------------------------------------------------
-
+# 零基礎科展範例程式（清洗後框可移動，大小固定，比例座標）
 import numpy as np
 from PIL import Image
 
@@ -32,7 +24,6 @@ except ModuleNotFoundError:
     raise ModuleNotFoundError("需要安裝 streamlit-cropper")
 
 # 分析核心
-
 def analyze_cleaning(before_crop: np.ndarray, after_crop: np.ndarray) -> float:
     before_gray = cv2.cvtColor(before_crop, cv2.COLOR_RGB2GRAY)
     after_gray = cv2.cvtColor(after_crop, cv2.COLOR_RGB2GRAY)
@@ -45,30 +36,22 @@ def analyze_cleaning(before_crop: np.ndarray, after_crop: np.ndarray) -> float:
     return float(np.mean(diff) / 255 * 100)
 
 # Streamlit 介面
-
 if HAS_STREAMLIT:
     st.set_page_config(page_title="抹布洗淨力分析（雙框可移動）", layout="wide")
-
     st.title("🧼 抹布清洗前後洗淨力影像分析")
     st.write("清洗前框自由調整，清洗後框大小固定，可移動位置")
 
     col1, col2 = st.columns(2)
-
     with col1:
-        st.subheader("清洗前")
         before_file = st.file_uploader("上傳清洗前照片", type=["jpg","png","jpeg"], key="before")
-
     with col2:
-        st.subheader("清洗後")
         after_file = st.file_uploader("上傳清洗後照片", type=["jpg","png","jpeg"], key="after")
 
     if before_file and after_file:
         before_img = Image.open(before_file).convert("RGB")
         after_img = Image.open(after_file).convert("RGB")
 
-        st.divider()
         st.subheader("① 清洗前框選")
-
         cropped_before, box_coords = st_cropper(
             before_img,
             realtime_update=True,
@@ -78,20 +61,27 @@ if HAS_STREAMLIT:
             key="before_crop"
         )
 
-        # 安全處理 box_coords，避免 TypeError
-        if box_coords is None or len(box_coords) != 4:
+        # 安全處理座標
+        if not box_coords or len(box_coords)!=4:
             x0, y0, x1, y1 = 0, 0, before_img.width, before_img.height
         else:
             try:
-                x0, y0, x1, y1 = [int(round(float(c))) for c in box_coords]
+                x0, y0, x1, y1 = [float(c) for c in box_coords]
             except Exception:
                 x0, y0, x1, y1 = 0, 0, before_img.width, before_img.height
 
         width = x1 - x0
         height = y1 - y0
 
-        st.subheader("② 清洗後框選（大小固定，可移動）")
-        # 使用清洗前框大小初始化清洗後框
+        # 將像素座標轉比例 0~1
+        initial_box_after = (
+            x0 / before_img.width,
+            y0 / before_img.height,
+            x1 / before_img.width,
+            y1 / before_img.height
+        )
+
+        st.subheader("② 清洗後框選（大小固定，可移動位置）")
         cropped_after = st_cropper(
             after_img,
             realtime_update=True,
@@ -99,7 +89,7 @@ if HAS_STREAMLIT:
             aspect_ratio=None,
             return_type='image',
             key="after_crop",
-            initial_box=(x0, y0, x0+width, y0+height)
+            initial_box=initial_box_after
         )
 
         col3, col4 = st.columns(2)
@@ -108,9 +98,7 @@ if HAS_STREAMLIT:
         with col4:
             st.image(cropped_after, caption="清洗後（裁切後，可移動框）")
 
-        st.divider()
         st.subheader("③ 洗淨力分析")
-
         diff_percent = analyze_cleaning(np.array(cropped_before), np.array(cropped_after))
         st.success(f"📊 洗淨差異百分比：約 {diff_percent:.2f} %")
 
