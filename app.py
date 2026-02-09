@@ -41,11 +41,21 @@ except ModuleNotFoundError:
 # --------------------------------------------------
 
 def analyze_cleaning(before_crop: np.ndarray, after_crop: np.ndarray) -> float:
+    # ① 轉灰階
     before_gray = cv2.cvtColor(before_crop, cv2.COLOR_RGB2GRAY)
     after_gray = cv2.cvtColor(after_crop, cv2.COLOR_RGB2GRAY)
 
+    # ② 【關鍵修正】確保兩張圖尺寸完全一致
+    if before_gray.shape != after_gray.shape:
+        after_gray = cv2.resize(after_gray, (before_gray.shape[1], before_gray.shape[0]))
+
+    # ③ 亮度分布校正（降低拍照光源誤差）
     after_matched = exposure.match_histograms(after_gray, before_gray)
+
+    # ④ 計算像素差異
     diff = cv2.absdiff(before_gray, after_matched.astype(np.uint8))
+
+    # ⑤ 轉換為百分比洗淨差異
     return float(np.mean(diff) / 255 * 100)
 
 # --------------------------------------------------
@@ -85,13 +95,7 @@ if HAS_STREAMLIT:
 
         # 套用相同裁切尺寸到 after 圖
         w, h = cropped_before.size
-        cropped_after = st_cropper(
-        after_img,
-        realtime_update=True,
-        box_color="#00AAFF",
-        aspect_ratio=None,
-        key="after_crop"
-       )
+        cropped_after = after_img.crop((0, 0, w, h))
 
         col3, col4 = st.columns(2)
         with col3:
@@ -126,4 +130,3 @@ if HAS_STREAMLIT:
 
 else:
     print("此版本主要設計為網頁應用程式，請於 Streamlit Cloud 使用")
-
